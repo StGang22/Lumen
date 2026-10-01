@@ -38,3 +38,12 @@ La configuración actual mantiene `auto_publish` desactivado; conservarlo así h
 ## Alcance empresarial añadido: Savior Authority
 
 Se recibió el requerimiento preliminar de un espacio web para registros de ingreso y tags NFC: captura desde sensor, ID por tag, asignación a empresas, operaciones dentro de la plataforma y auditoría integral. Sigue siendo descubrimiento; no hay lector conectado ni control físico habilitado. Antes de un piloto deben definirse modelo/protocolo del sensor, finalidad de los tags, empresas/miembros/roles, operaciones autorizadas, datos personales y retención, y propósito del correo `authoritysavior@gmail.com`. El detalle está en `docs/requirements-savior-authority.md`. No usar credenciales ni conectar sistemas hasta confirmar esas decisiones.
+
+
+## Revisión read-only de SaviFiAuthority
+
+Se localizó el repositorio privado `StGang22/SaviFiAuthority` (SHA revisada `f46dfe515761bc3e222ccf3a22bc7197562dcd71`) y el monorepo relacionado `StGang22/Savior-Network` (SHA `0e5d4d09be2d183fa87df87b3b4053602311ede3`). El propietario confirmó `authoritysavior@gmail.com` como correo de la cuenta maestra; el código admite acceso Supabase por correo/contraseña o Google y exige perfil `is_superadmin=true`. No se intentó acceder.
+
+La consola ya tiene módulos de Comercios y Tags: el escaneo NFC requiere una acción manual desde Chrome en Android; permite registrar `tag_uid`, asignar tags a comercios y activar/revocar. SaviFi registra toques como visitas de clientes para fidelización y recompensas. **No equivale a control de acceso de empleados/visitantes o puertas.** Existe una tabla `audit_log`, pero no se encontró una pantalla de auditoría en la consola y queda por comprobar su cobertura de eventos. El enlace Vercel compartido muestra Savior Business; falta el URL desplegado de SaviFiAuthority para inspección visual. Lumen sigue sin integración con esa plataforma.
+
+Antes de un piloto, definir el significado de “registros de ingreso”, el ID visible del tag, el lector deseado, el modo de solo lectura/escritura aprobada de Lumen y la auditoría completa. Véase `docs/requirements-savior-authority.md`.
