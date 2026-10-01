@@ -8,6 +8,20 @@
       "when": 1788785580464,
       "tag": "0000_initial_users",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1790885802328,
+      "tag": "0001_lumen_mvp",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1790887315029,
+      "tag": "0002_session_revocation",
+      "breakpoints": true
     }
   ]
 }

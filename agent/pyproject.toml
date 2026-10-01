@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lumen-agent"
+version = "0.1.0"
+description = "Agente local de presencia para Lumen; no ejecuta comandos remotos."
+requires-python = ">=3.10"
+dependencies = ["keyring>=25.5,<27"]
+
+[project.scripts]
+lumen-agent = "lumen_agent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lumen_agent*"]

@@ -7,6 +7,7 @@ import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
 import { ENV } from "./env";
+import { isSessionIssuedAfterCutoff } from "./sessionCutoff";
 import type {
   ExchangeTokenRequest,
   ExchangeTokenResponse,
@@ -191,8 +192,9 @@ class SDKServer {
       openId: payload.openId,
       appId: payload.appId,
       name: payload.name,
-    })
+      })
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+      .setIssuedAt(Math.floor(issuedAt / 1000))
       .setExpirationTime(expirationSeconds)
       .sign(secretKey);
   }
@@ -219,6 +221,14 @@ class SDKServer {
       ) {
         console.warn("[Auth] Session payload missing required fields");
         return null;
+      }
+
+      if (!openId.startsWith(CRON_OPEN_ID_PREFIX)) {
+        const cutoff = await db.getSessionRevocationCutoff();
+        if (!isSessionIssuedAfterCutoff(payload.iat, cutoff)) {
+          console.warn("[Auth] Session predates the application revocation cutoff");
+          return null;
+        }
       }
 
       return {

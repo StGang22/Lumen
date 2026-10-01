@@ -5,16 +5,20 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { publicPlatformScript } from "./publicConfig";
 import { appRouter } from "../routers";
+import { registerAgentRoutes } from "../lumen/agentRoutes";
+import { guardTrpcMutations } from "../lumen/csrf";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // This MVP does not accept file uploads; keep anonymous request bodies small.
+  app.use("/api/agent/pair", express.json({ limit: "4kb" }));
+  app.use(express.json({ limit: "1mb" }));
+  app.use(express.urlencoded({ limit: "16kb", extended: false }));
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+  registerAgentRoutes(app);
   app.get("/api/platform/config.js", (_req, res) => {
     res.set("Cache-Control", "no-store").type("application/javascript").send(publicPlatformScript());
   });
@@ -22,6 +26,7 @@ async function startServer() {
   // tRPC API
   app.use(
     "/api/trpc",
+    guardTrpcMutations,
     createExpressMiddleware({
       router: appRouter,
       createContext,

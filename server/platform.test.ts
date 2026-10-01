@@ -6,6 +6,14 @@ import { listLLMModels } from "./_core/llm";
 import { generateImage } from "./_core/imageGeneration";
 import { COOKIE_NAME } from "../shared/const";
 
+vi.mock("./db", async importOriginal => {
+  const actual = await importOriginal<typeof import("./db")>();
+  return {
+    ...actual,
+    getSessionRevocationCutoff: vi.fn(async () => new Date(0)),
+  };
+});
+
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 describe("current platform integration", () => {
   it("exposes only named public runtime configuration", () => {

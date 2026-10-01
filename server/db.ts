@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, sessionRevocationPolicy, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -86,6 +86,15 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getSessionRevocationCutoff(): Promise<Date> {
+  const db = await getDb();
+  if (!db) throw new Error("Session revocation policy is unavailable");
+  const rows = await db.select({ invalidatedBefore: sessionRevocationPolicy.invalidatedBefore })
+    .from(sessionRevocationPolicy).where(eq(sessionRevocationPolicy.id, 1)).limit(1);
+  if (!rows[0]) throw new Error("Session revocation policy is not initialized");
+  return rows[0].invalidatedBefore;
 }
 
 // TODO: add feature queries here as your schema grows.

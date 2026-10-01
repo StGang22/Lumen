@@ -111,3 +111,13 @@ temp/
 
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
+
+# Lumen local agent / protected configuration
+.env*
+!.env.example
+__pycache__/
+*.py[cod]
+agent/.venv/
+
+# Never commit local diagnostic logs; these may contain session data.
+.manus-logs/
