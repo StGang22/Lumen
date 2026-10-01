@@ -33,3 +33,8 @@ El propietario pidió que Lumen permanezca en segundo plano, se active por palab
 - Solicitar una instrucción explícita para publicar la aplicación. La conexión del repositorio a GitHub no publica el panel.
 
 La configuración actual mantiene `auto_publish` desactivado; conservarlo así hasta una decisión explícita de lanzamiento.
+
+
+## Alcance empresarial añadido: Savior Authority
+
+Se recibió el requerimiento preliminar de un espacio web para registros de ingreso y tags NFC: captura desde sensor, ID por tag, asignación a empresas, operaciones dentro de la plataforma y auditoría integral. Sigue siendo descubrimiento; no hay lector conectado ni control físico habilitado. Antes de un piloto deben definirse modelo/protocolo del sensor, finalidad de los tags, empresas/miembros/roles, operaciones autorizadas, datos personales y retención, y propósito del correo `authoritysavior@gmail.com`. El detalle está en `docs/requirements-savior-authority.md`. No usar credenciales ni conectar sistemas hasta confirmar esas decisiones.
