@@ -1,7 +1,16 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
-import { pairAgent, authenticateAgentToken, revokeAgentToken, touchAgent, recordAgentPresence } from "./store";
+import { TRPCError } from "@trpc/server";
+import {
+  pairAgent,
+  authenticateAgentToken,
+  revokeAgentToken,
+  touchAgent,
+  recordAgentPresence,
+  claimAgentJob,
+  completeAgentJob,
+} from "./store";
 
 const PairBody = z.object({
   pairingCode: z.string().min(20).max(80),
@@ -67,7 +76,6 @@ export function registerAgentRoutes(app: Express) {
       return;
     }
 
-    // The bearer token is returned once. Only its SHA-256 digest is retained.
     res.set("Cache-Control", "no-store").set("Pragma", "no-cache").status(201).json({ deviceId, deviceToken, deviceName: paired.name });
   });
 
@@ -107,6 +115,71 @@ export function registerAgentRoutes(app: Express) {
       }
       res.set("Cache-Control", "no-store").json({ success: true });
     } catch {
+      sendUnavailable(res);
+    }
+  });
+
+  app.post("/api/agent/jobs/claim", async (req, res) => {
+    const token = bearerToken(req);
+    if (!token) {
+      res.status(401).json({ error: "A valid device credential is required." });
+      return;
+    }
+    try {
+      const device = await authenticateAgentToken(token);
+      if (!device) {
+        res.status(401).json({ error: "Device credential is invalid or revoked." });
+        return;
+      }
+      await touchAgent(device.id);
+      const job = await claimAgentJob(device.id, device.ownerId);
+      res.set("Cache-Control", "no-store").json({ job });
+    } catch {
+      sendUnavailable(res);
+    }
+  });
+
+  app.post("/api/agent/jobs/:jobId/result", async (req, res) => {
+    const token = bearerToken(req);
+    if (!token) {
+      res.status(401).json({ error: "A valid device credential is required." });
+      return;
+    }
+    const jobId = String(req.params.jobId || "");
+    if (!/^[0-9a-f-]{36}$/i.test(jobId)) {
+      res.status(400).json({ error: "Invalid job id." });
+      return;
+    }
+    const body = z.object({
+      exitCode: z.number().int().nullable(),
+      stdout: z.string().max(65536),
+      stderr: z.string().max(65536),
+      errorMessage: z.string().max(500).nullable().optional(),
+      ok: z.boolean(),
+    }).strict().safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: "Invalid result payload." });
+      return;
+    }
+    try {
+      const device = await authenticateAgentToken(token);
+      if (!device) {
+        res.status(401).json({ error: "Device credential is invalid or revoked." });
+        return;
+      }
+      await completeAgentJob(device.id, device.ownerId, jobId, {
+        exitCode: body.data.exitCode,
+        stdout: body.data.stdout,
+        stderr: body.data.stderr,
+        errorMessage: body.data.errorMessage ?? null,
+        ok: body.data.ok,
+      });
+      res.set("Cache-Control", "no-store").json({ success: true });
+    } catch (err) {
+      if (err instanceof TRPCError && err.code === "NOT_FOUND") {
+        res.status(404).json({ error: "Running job not found." });
+        return;
+      }
       sendUnavailable(res);
     }
   });
