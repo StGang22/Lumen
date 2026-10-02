@@ -94,3 +94,34 @@ export const memoryNotes = mysqlTable("memory_notes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
+
+/** Terminal jobs executed by a paired local agent after human approval. */
+export const agentJobs = mysqlTable("agent_jobs", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  ownerId: int("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  deviceId: varchar("device_id", { length: 36 }).notNull().references(() => agentDevices.id, { onDelete: "cascade" }),
+  context: mysqlEnum("context", ["personal", "home", "business"]).notNull().default("personal"),
+  command: text("command").notNull(),
+  cwd: varchar("cwd", { length: 500 }),
+  timeoutSeconds: int("timeout_seconds").notNull().default(30),
+  status: mysqlEnum("status", [
+    "pending_approval",
+    "approved",
+    "rejected",
+    "running",
+    "completed",
+    "failed",
+    "cancelled",
+  ]).notNull().default("pending_approval"),
+  stdout: text("stdout"),
+  stderr: text("stderr"),
+  exitCode: int("exit_code"),
+  errorMessage: varchar("error_message", { length: 500 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  approvedAt: timestamp("approved_at"),
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
+});
+
+export type AgentJob = typeof agentJobs.$inferSelect;
+export type InsertAgentJob = typeof agentJobs.$inferInsert;
