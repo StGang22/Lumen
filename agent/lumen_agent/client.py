@@ -8,9 +8,12 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
+from .terminal import run_command, TerminalError
+
 SERVICE_NAME = "lumen-agent"
 KEY_NAME = "paired-device"
 TIMEOUT_SECONDS = 12
+CAPABILITIES = ["presence", "terminal"]
 
 
 class LumenAgentError(RuntimeError):
@@ -39,9 +42,8 @@ def _request_json(url: str, *, method: str, payload: dict | None = None, token: 
     request = Request(url, data=body, headers=headers, method=method)
     try:
         with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-            raw = response.read(128 * 1024)
+            raw = response.read(256 * 1024)
     except HTTPError as error:
-        # Do not include response bodies, which could contain server data or secrets.
         raise LumenAgentError(f"Lumen returned HTTP {error.code}.") from None
     except (URLError, TimeoutError, OSError):
         raise LumenAgentError("Could not reach Lumen. Check the URL and network connection.") from None
@@ -69,7 +71,6 @@ def pair(server_url: str, pairing_code: str, device_name: str | None = None) -> 
     if not isinstance(token, str) or not isinstance(device_id, str):
         raise LumenAgentError("Pairing did not return a usable device credential.")
 
-    # Fail closed if the operating system does not provide a secure credential store.
     keyring = None
     try:
         keyring = importlib.import_module("keyring")
@@ -117,14 +118,87 @@ def heartbeat() -> dict:
     )
     if response.get("deviceId") != credentials["device_id"]:
         raise LumenAgentError("The server returned a different device identity.")
-    if response.get("capabilities") != ["presence"]:
+    caps = response.get("capabilities")
+    if not isinstance(caps, list) or "presence" not in caps:
         raise LumenAgentError("The server returned an unsupported capability set.")
-    return {"device_name": response.get("name", "Lumen device"), "last_seen": response.get("lastSeenAt")}
+    return {
+        "device_name": response.get("name", "Lumen device"),
+        "last_seen": response.get("lastSeenAt"),
+        "capabilities": caps,
+    }
 
 
-def run_presence_loop(interval_seconds: int) -> None:
-    if interval_seconds < 10 or interval_seconds > 3600:
-        raise LumenAgentError("The heartbeat interval must be between 10 and 3600 seconds.")
+def claim_job() -> dict | None:
+    """Poll for one approved terminal job. Returns None if none available."""
+    credentials = load_credentials()
+    response = _request_json(
+        f"{credentials['server']}/api/agent/jobs/claim",
+        method="POST",
+        token=credentials["token"],
+        payload={},
+    )
+    job = response.get("job")
+    if job is None:
+        return None
+    if not isinstance(job, dict) or not isinstance(job.get("id"), str):
+        raise LumenAgentError("Invalid job payload from server.")
+    return job
+
+
+def submit_result(job_id: str, result: dict) -> None:
+    credentials = load_credentials()
+    _request_json(
+        f"{credentials['server']}/api/agent/jobs/{job_id}/result",
+        method="POST",
+        token=credentials["token"],
+        payload={
+            "exitCode": result.get("exit_code"),
+            "stdout": (result.get("stdout") or "")[:65536],
+            "stderr": (result.get("stderr") or "")[:65536],
+            "errorMessage": result.get("error_message"),
+            "ok": bool(result.get("ok")),
+        },
+    )
+
+
+def process_one_job() -> bool:
+    """Claim, execute, and report one job. Returns True if a job was processed."""
+    job = claim_job()
+    if not job:
+        return False
+    job_id = job["id"]
+    command = job.get("command") or ""
+    cwd = job.get("cwd")
+    timeout = int(job.get("timeoutSeconds") or 30)
+    print(f"Executing job {job_id[:8]}…: {command[:80]}")
+    try:
+        result = run_command(command, cwd=cwd, timeout_seconds=timeout)
+    except TerminalError as exc:
+        result = {
+            "ok": False,
+            "exit_code": None,
+            "stdout": "",
+            "stderr": "",
+            "error_message": str(exc)[:500],
+        }
+    submit_result(job_id, result)
+    status = "ok" if result.get("ok") else "failed"
+    print(f"Job {job_id[:8]} finished ({status}, exit={result.get('exit_code')}).")
+    return True
+
+
+def run_worker_loop(interval_seconds: int = 5) -> None:
+    """Heartbeat + poll for terminal jobs."""
+    if interval_seconds < 2 or interval_seconds > 120:
+        raise LumenAgentError("Worker interval must be between 2 and 120 seconds.")
+    print("Lumen agent worker active (presence + terminal). Ctrl+C to stop.")
     while True:
-        heartbeat()
+        try:
+            heartbeat()
+            # Drain up to a few jobs per cycle
+            for _ in range(3):
+                if not process_one_job():
+                    break
+        except LumenAgentError as err:
+            print(f"Lumen Agent: {err}")
         time.sleep(interval_seconds)
